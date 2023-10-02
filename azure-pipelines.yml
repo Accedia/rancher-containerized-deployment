@@ -1,0 +1,46 @@
+trigger:
+- main
+
+variables:
+  - group: variable_group
+
+jobs:
+- job: Build
+  pool:
+    vmImage: ubuntu-latest
+
+  steps:
+
+  - task: Docker@2
+    displayName: 'BackEnd Build'
+    inputs:
+      repository: '<repository>'
+      command: 'build'
+      Dockerfile: 'angular-app/Dockerfile'
+      tags: 'v1.$(Build.BuildNumber)'
+
+  - task: ECRPushImage@1
+    displayName: 'Push image'
+    inputs:
+      awsCredentials: '<aws_credentials>'
+      regionName: 'eu-north-1'
+      sourceImageName: '<repository>'
+      sourceImageTag: 'v1.$(Build.BuildNumber)'
+      repositoryName: 'application'
+      pushTag: 'v1.$(Build.BuildNumber)'
+
+- job: Deploy
+  dependsOn: Build
+  pool:
+    name: rancher_deployment_agents
+  steps:
+  - checkout: none
+  - bash: /scripts/Rancher.sh
+    displayName: Run Rancher Deployment Script
+    failOnStderr: true
+    env:
+      rancherAccessKey: $(rancher_access_key)
+      rancherSecretKey: $(rancher_secret_key)
+      rancherDeploymentApiUrl: $(rancher_deployment_api_url)
+      BuildDefinitionName: $(Build.DefinitionName)
+      BuildBuildNumber: $(Build.BuildNumber)
